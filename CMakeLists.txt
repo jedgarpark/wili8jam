@@ -72,12 +72,9 @@ target_include_directories(fatfs PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# --- TinyUSB host stack for PIO-USB ---
-# We CANNOT link tinyusb_host_base because it defines RP2040_USB_HOST_MODE=1
-# which configures the native USB hardware for host mode. We need native USB
-# in device mode for CDC serial. Instead, include the host stack sources
-# directly (without hcd_rp2040.c / rp2040_usb.c) so only PIO-USB is used.
-set(TINYUSB_PATH ${PICO_SDK_PATH}/lib/tinyusb)
+# --- USB Host library (PIO-USB, HID, XInput, CDC, MSC) ---
+set(FWUSBHOST_TUSB_DEBUG_LEVEL 2)  # output goes to ring buffer, dumped via 'info'
+add_subdirectory(usb-host)
 
 # --- Main executable ---
 add_executable(wili8jam
@@ -94,42 +91,27 @@ add_executable(wili8jam
     src/p8_png.c
     src/p8_console.c
     src/p8_editor.c
-    usb-host/fwUSBHost.cpp
-    usb-host/fwUSBHostHID.cpp
-    usb-host/fwUSBHostHIDKeyboard.cpp
-    usb-host/fwUSBHostHIDMouse.cpp
-    usb-host/fwUSBHostHIDGeneric.cpp
-    usb-host/fwUSBHostCDC.cpp
-    usb-host/fwUSBHostMSC.cpp
-    # TinyUSB host stack (no native HCD — PIO-USB only)
-    ${TINYUSB_PATH}/src/host/usbh.c
-    ${TINYUSB_PATH}/src/host/hub.c
-    ${TINYUSB_PATH}/src/class/cdc/cdc_host.c
-    ${TINYUSB_PATH}/src/class/hid/hid_host.c
-    ${TINYUSB_PATH}/src/class/msc/msc_host.c
-    ${TINYUSB_PATH}/src/class/vendor/vendor_host.c
-    # PIO-USB HCD (normally added to tinyusb_host_base by tinyusb_pico_pio_usb)
-    ${TINYUSB_PATH}/src/portable/raspberrypi/pio_usb/hcd_pio_usb.c
+    # TinyUSB host stack — must be compiled in the executable (not fwUSBHost lib)
+    # to avoid duplicate symbols with the device stack from pico_stdio_usb
+    ${FWUSBHOST_TINYUSB_HOST_SOURCES}
 )
 
 # Generate PIO header for I2S audio
 pico_generate_pio_header(wili8jam ${CMAKE_CURRENT_SOURCE_DIR}/src/audio_i2s.pio)
 
-# tusb_config.h in usb-host/ must be found BEFORE SDK paths
+# usb-host/ and tusb_xinput/ include dirs come from fwUSBHost target
 target_include_directories(wili8jam PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/usb-host
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${LUA_SRC_DIR}
-    ${TINYUSB_PATH}/src
 )
 
 target_link_libraries(wili8jam PRIVATE
     lua54
     tlsf
     fatfs
+    fwUSBHost
     pico_stdlib
-    tinyusb_pico_pio_usb
     hardware_pio
     hardware_spi
     hardware_sync
