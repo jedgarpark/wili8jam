@@ -158,7 +158,7 @@ bool tuh_xinput_receive_report(uint8_t dev_addr, uint8_t instance);
 bool tuh_xinput_send_report(uint8_t dev_addr, uint8_t instance, const uint8_t *txbuf, uint16_t len);
 
 /**
- * @brief Set LED status on an XInput device. (Applicated to Xbox 360 controllers only)
+ * @brief Set LED status on an XInput device. (Applicable to Xbox 360 controllers only)
  *
  * This function sets the LED status on the specified XInput device for the specified quadrant.
  *
