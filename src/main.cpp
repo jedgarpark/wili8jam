@@ -21,6 +21,7 @@ extern "C" {
 #include "dvi.h"
 #include "input.h"
 #include "audio.h"
+#include "wiipad.h"
 #include "p8_preprocess.h"
 #include "p8_api.h"
 #include "p8_sfx.h"
@@ -803,6 +804,13 @@ int main() {
             input_xinput_update(pad->wButtons, pad->sThumbLX, pad->sThumbLY, player);
         });
 
+    // Register USB controller count poll for wiipad player assignment.
+    // If any USB gamepad is connected, the wiipad becomes player 2.
+    input_set_usb_controller_count_poll([]() -> int {
+        return (int)(obUSBHost.m_obHID.getControllerCount()
+                   + obUSBHost.m_obXInput.getMountedCount());
+    });
+
     printf("\n");
     printf("========================================\n");
     printf("  wili8jam — Lua 5.4.7 on Fruit Jam\n");
@@ -869,6 +877,10 @@ int main() {
         printf("Audio: init failed\n");
         p8_console_print("audio: failed\n");
     }
+
+    // Init Wii controller on STEMMA QT (must be after audio_init — it sets up i2c0)
+    wiipad_init();
+    p8_console_draw(); gfx_flip();
 
     // Init PICO-8 SFX/music engine (wavetables + pitch table)
     p8_sfx_init();

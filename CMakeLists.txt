@@ -84,6 +84,7 @@ add_executable(wili8jam
     src/gfx.c
     src/input.c
     src/audio.c
+    src/wiipad.c
     src/p8_preprocess.c
     src/p8_api.c
     src/p8_sfx.c

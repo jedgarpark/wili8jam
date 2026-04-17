@@ -31,6 +31,11 @@ bool input_key(uint8_t keycode);
 typedef uint8_t (*input_modifier_poll_fn)(void);
 void input_set_modifier_poll(input_modifier_poll_fn fn);
 
+// USB controller count poll — used by wiipad player assignment.
+// Register a function that returns the number of USB gamepads currently connected.
+typedef int (*input_usb_ctrl_count_fn)(void);
+void input_set_usb_controller_count_poll(input_usb_ctrl_count_fn fn);
+
 // Get next character from USB keyboard buffer. Returns -1 if empty.
 int input_getchar(void);
 

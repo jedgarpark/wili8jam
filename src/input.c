@@ -1,4 +1,5 @@
 #include "input.h"
+#include "wiipad.h"
 #include <string.h>
 #include "lua.h"
 #include "lauxlib.h"
@@ -161,6 +162,8 @@ void input_mouse_reset(void) {
 
 void input_set_modifier_poll(input_modifier_poll_fn fn) { modifier_poll_fn = fn; }
 
+static void input_wiipad_update(void);  // defined after gamepad_vkeys below
+
 void input_update(void) {
     // Poll USB host so new HID reports are processed
     tuh_task();
@@ -170,6 +173,9 @@ void input_update(void) {
 
     // Poll mouse if registered
     if (mouse_poll_fn) mouse_poll_fn();
+
+    // Poll Wii controller and inject into virtual keycode space
+    input_wiipad_update();
 
     // Update btnp hold counters for each player/button
     for (int p = 0; p < 2; p++) {
@@ -242,6 +248,47 @@ static const uint8_t gamepad_vkeys[2][7] = {
     { VKEY_GP1_LEFT, VKEY_GP1_RIGHT, VKEY_GP1_UP, VKEY_GP1_DOWN, VKEY_GP1_O, VKEY_GP1_X, VKEY_GP1_MENU },
     { VKEY_GP2_LEFT, VKEY_GP2_RIGHT, VKEY_GP2_UP, VKEY_GP2_DOWN, VKEY_GP2_O, VKEY_GP2_X, 0 },
 };
+
+// --- Wii controller ---
+
+// USB controller count poll — determines wiipad player assignment
+static input_usb_ctrl_count_fn usb_ctrl_count_fn = NULL;
+
+void input_set_usb_controller_count_poll(input_usb_ctrl_count_fn fn) {
+    usb_ctrl_count_fn = fn;
+}
+
+// Last player slot the wiipad was assigned to (-1 = not yet assigned).
+// Tracked so we can clear stale vkeys when the assignment changes.
+static int wiipad_player = -1;
+
+static void input_wiipad_update(void) {
+    int usb_count = usb_ctrl_count_fn ? usb_ctrl_count_fn() : 0;
+    int new_player = (usb_count > 0) ? 1 : 0;
+
+    // If the player slot changed, clear all vkeys for the old slot so
+    // nothing gets stuck when a USB controller is plugged or unplugged.
+    if (wiipad_player != -1 && wiipad_player != new_player) {
+        const uint8_t *old_vk = gamepad_vkeys[wiipad_player];
+        for (int i = 0; i < 7; i++) {
+            if (old_vk[i]) key_clear(key_state, old_vk[i]);
+        }
+    }
+    wiipad_player = new_player;
+
+    uint16_t btns = wiipad_read();
+    const uint8_t *vk = gamepad_vkeys[new_player];
+
+    if (btns & WII_BTN_LEFT)  key_set(key_state, vk[0]); else key_clear(key_state, vk[0]);
+    if (btns & WII_BTN_RIGHT) key_set(key_state, vk[1]); else key_clear(key_state, vk[1]);
+    if (btns & WII_BTN_UP)    key_set(key_state, vk[2]); else key_clear(key_state, vk[2]);
+    if (btns & WII_BTN_DOWN)  key_set(key_state, vk[3]); else key_clear(key_state, vk[3]);
+    if (btns & WII_BTN_A)     key_set(key_state, vk[4]); else key_clear(key_state, vk[4]);
+    if (btns & WII_BTN_B)     key_set(key_state, vk[5]); else key_clear(key_state, vk[5]);
+    if (vk[6]) {
+        if (btns & WII_BTN_PLUS) key_set(key_state, vk[6]); else key_clear(key_state, vk[6]);
+    }
+}
 
 void input_gamepad_report(const uint8_t *report, uint16_t len, int player) {
     if (len < 3) return;
