@@ -182,3 +182,5 @@ The bit reader is LSB-first within each byte throughout.
 | Editor auto-load reads binary PNG | Garbled editor after loading .p8.png via Splore | `p8_editor_enter()`: skip auto-load if cart path ends in `.p8.png` |
 | Editor buffer empty for .p8.png carts | Editor shows `[new]` with no code | `p8_cart_run()`: call `p8_editor_load_buf(lua_code, lua_len)` before freeing decompressed code |
 | Compound assignment RHS includes `;` | `')' expected near ';'` (e.g. `a+=1; b=2` → `a = a + (1;)`) | `find_rhs_end()` in `p8_preprocess.c`: stop at `;` at depth 0 |
+| API functions reject float args | `bad argument #N to 'sub' (number has no integer representation)` | `p8_api.c`: switch `luaL_checkinteger`/`luaL_optinteger` → `luaL_checknumber`/`luaL_optnumber` for `cls`, `color`, `print`, `add`, `deli`, `sub`, `chr`, `ord`, `stat`, `menuitem` |
+| `print` rejects nil x/y | `bad argument #3 to 'print' (number expected, got nil)` | `p8_print()`: use `luaL_optnumber` with cursor position as default so nil args fall back gracefully |
