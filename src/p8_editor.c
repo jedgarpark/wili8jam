@@ -897,11 +897,17 @@ void p8_editor_init(tlsf_t tlsf) {
 void p8_editor_enter(void) {
     if (!ensure_allocated()) return;
 
-    // If editor buffer is empty and a cart is loaded, auto-load its code
+    // If editor buffer is empty and a cart is loaded, auto-load its code.
+    // Skip .p8.png carts — they're binary PNG files; code is extracted by
+    // the cart loader, not available as plain text for the editor.
     if (text_len == 0 && ed_path[0] == '\0') {
         const char *cart = p8_cart_get_path();
-        if (cart && cart[0])
-            load_file(cart);
+        if (cart && cart[0]) {
+            size_t clen = strlen(cart);
+            bool is_png = (clen >= 7 && strcmp(cart + clen - 7, ".p8.png") == 0);
+            if (!is_png)
+                load_file(cart);
+        }
     }
 
     input_flush();
@@ -1052,6 +1058,37 @@ void p8_editor_enter(void) {
 bool p8_editor_load(const char *path) {
     if (!ensure_allocated()) return false;
     return load_file(path);
+}
+
+bool p8_editor_load_buf(const char *lua_code, size_t lua_len) {
+    if (!ensure_allocated()) return false;
+    if (!lua_code || lua_len == 0) return false;
+
+    free_sections(); // clear any prefix/suffix from a previously loaded .p8 file
+
+    // Sanitize: strip \r, convert tabs to spaces — same as load_file()
+    size_t cap = lua_len < (size_t)TEXT_MAX ? lua_len : (size_t)TEXT_MAX;
+    if ((int)cap >= text_cap) {
+        int nc = (int)cap + 1024;
+        if (nc > TEXT_MAX) nc = TEXT_MAX;
+        char *nb = (char *)tlsf_realloc(ed_tlsf, text, nc);
+        if (nb) { text = nb; text_cap = nc; }
+    }
+
+    int w = 0;
+    for (size_t i = 0; i < lua_len && w < text_cap - 1; i++) {
+        char c = lua_code[i];
+        if (c == '\r') continue;
+        if (c == '\t') { text[w++] = ' '; continue; }
+        text[w++] = c;
+    }
+    text_len = w;
+
+    ed_path[0] = '\0'; // no backing file — editor shows [new]
+    cur_pos = cur_row = cur_col = scroll_y = scroll_x = want_col = 0;
+    ed_dirty = false;
+    cache_rebuild();
+    return true;
 }
 
 bool p8_editor_save(const char *path) {

@@ -675,6 +675,9 @@ static size_t find_rhs_end(const char *line, size_t start, size_t len) {
         if (c == ')' || c == ']') { if (depth > 0) depth--; i++; continue; }
 
         if (depth == 0) {
+            /* Semicolon is a statement separator — RHS ends here */
+            if (c == ';') break;
+
             /* Check for bare keywords that end a statement */
             if (is_ident_char(c) && (i == start || !is_ident_char(line[i-1]))) {
                 if (match_keyword(line, i, len, "end") ||

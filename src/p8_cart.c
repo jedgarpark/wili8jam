@@ -637,6 +637,12 @@ int p8_cart_run(lua_State *L, const char *path) {
         return -1;
     }
 
+    // Load decompressed Lua into editor buffer so ESC→editor shows the code.
+    // For .p8.png carts this is the only opportunity — the code is freed after
+    // preprocessing.  For .p8 carts the editor already loaded the file above.
+    if (is_p8png(path))
+        p8_editor_load_buf(lua_code, lua_len);
+
     // Preprocess PICO-8 syntax
     size_t pp_len;
     char *pp_code = p8_preprocess(lua_code, lua_len, &pp_len);

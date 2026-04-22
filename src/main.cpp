@@ -27,6 +27,8 @@ extern "C" {
 #include "p8_cart.h"
 #include "p8_console.h"
 #include "p8_editor.h"
+#include "esp_nina.h"
+#include "p8_splore.h"
 }
 
 // TinyUSB debug printf (declared in tusb_config.h)
@@ -861,7 +863,14 @@ int main() {
 
     printf("DVI: 640x480 output started\n");
 
-    // Init audio (codec + I2S + DMA)
+    // Init ESP32-C6 WiFi co-processor FIRST — nina_init() pulses GPIO22 (PERIPH_RESET)
+    // LOW to give the ESP32-C6 a clean boot. GPIO22 is shared with the audio codec,
+    // so audio_init() must come AFTER this reset and will reconfigure the codec.
+    nina_init();
+    p8_console_print("wifi: init\n");
+    p8_console_draw(); gfx_flip();
+
+    // Init audio (codec + I2S + DMA) — codec was just released from reset above
     if (audio_init()) {
         printf("Audio: I2S + DAC ready\n");
         p8_console_print("audio: ready\n");
@@ -949,6 +958,7 @@ int main() {
     lua_register(L, "help", lua_help);
     lua_register(L, "info", lua_info);
     lua_register(L, "reboot", lua_reboot);
+    p8_splore_register(L);
 
     // Snapshot all built-in globals — anything registered after this point
     // or by carts will be cleaned up on cart switch

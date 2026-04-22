@@ -492,17 +492,36 @@ static char *decompress_pxa(const uint8_t *src, size_t src_len,
 
             out[oi++] = (char)ch;
         } else {
-            // Copy reference
-            int offset_bits = br_bit(&br);
-            int length_bits = br_bit(&br);
-            int offset = (int)br_bits(&br, 3 + offset_bits);
-            int length = (int)br_bits(&br, 4 + length_bits);
+            // Back-reference: 1-2 prefix bits choose the offset field width
+            //   0  → 15-bit field
+            //   10 → 10-bit field (raw_val==0 is the raw-literal-block sentinel)
+            //   11 →  5-bit field
+            // Confirmed against Lexaloffle pxa_compress_snippets.c, zepto8, shrinko8.
+            int nbits;
+            if      (br_bit(&br) == 0) { nbits = 15; }
+            else if (br_bit(&br) == 0) { nbits = 10; }
+            else                       { nbits =  5; }
+            int offset = (int)br_bits(&br, nbits) + 1; // +1: encoded value is (offset-1)
 
-            if (offset == 0 || offset > (int)oi) break; // invalid
+            if (nbits == 10 && offset == 1) {
+                // Raw literal block: 8-bit bytes until 0x00 terminator
+                uint8_t ch;
+                while ((ch = (uint8_t)br_bits(&br, 8)) != 0) {
+                    if (oi >= decomp_len) break;
+                    out[oi++] = (char)ch;
+                }
+            } else {
+                if ((size_t)offset > oi) break; // invalid back-reference
 
-            for (int ci = 0; ci < length && oi < decomp_len; ci++)
-                out[oi + ci] = out[oi - offset + ci];
-            oi += length;
+                // Chain-encoded length: read 3-bit groups until one is < 7, then +3
+                // Min length = 3 (PXA_MIN_BLOCK_LEN); chains of 7 extend the count.
+                int len = 3, n;
+                do { n = (int)br_bits(&br, 3); len += n; } while (n == 7);
+
+                for (int ci = 0; ci < len && oi < decomp_len; ci++)
+                    out[oi + ci] = out[oi - offset + ci];
+                oi += len;
+            }
         }
     }
 

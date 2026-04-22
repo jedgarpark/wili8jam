@@ -157,7 +157,7 @@ static void p8_hline(int x0, int x1, int y, int c) {
 // --- Graphics ---
 
 static int p8_cls(lua_State *L) {
-    int c = (int)luaL_optinteger(L, 1, 0);
+    int c = (int)luaL_optnumber(L, 1, 0);
     gfx_cls(c & 0xF);
     p8_cursor_x = 0;
     p8_cursor_y = 0;
@@ -192,13 +192,15 @@ static int p8_print(lua_State *L) {
 
     int x, y, c;
     if (lua_gettop(L) >= 3) {
-        x = (int)luaL_checknumber(L, 2);
-        y = (int)luaL_checknumber(L, 3);
-        c = lua_isnoneornil(L, 4) ? p8_draw_color : (int)luaL_checknumber(L, 4);
+        // print(str, x, y) or print(str, x, y, col) — nil args fall back to cursor
+        x = (int)luaL_optnumber(L, 2, (lua_Number)p8_cursor_x);
+        y = (int)luaL_optnumber(L, 3, (lua_Number)p8_cursor_y);
+        c = lua_isnoneornil(L, 4) ? p8_draw_color : (int)luaL_optnumber(L, 4, (lua_Number)p8_draw_color);
     } else {
+        // print(str) or print(str, col)
         x = p8_cursor_x;
         y = p8_cursor_y;
-        c = lua_isnoneornil(L, 2) ? p8_draw_color : (int)luaL_checknumber(L, 2);
+        c = lua_isnoneornil(L, 2) ? p8_draw_color : (int)luaL_optnumber(L, 2, (lua_Number)p8_draw_color);
     }
 
     if (!lua_isnoneornil(L, 4) || (lua_gettop(L) < 3 && !lua_isnoneornil(L, 2)))
@@ -216,7 +218,7 @@ static int p8_print(lua_State *L) {
 }
 
 static int p8_color(lua_State *L) {
-    int c = (int)luaL_optinteger(L, 1, 6);
+    int c = (int)luaL_optnumber(L, 1, 6);
     p8_draw_color = c & 0xF;
     return 0;
 }
@@ -758,7 +760,7 @@ static int p8_add(lua_State *L) {
         lua_pushvalue(L, 2);
         lua_rawseti(L, 1, n + 1);
     } else {
-        int i = (int)luaL_checkinteger(L, 3);
+        int i = (int)luaL_checknumber(L, 3);
         // Shift elements up
         for (int j = n; j >= i; j--) {
             lua_rawgeti(L, 1, j);
@@ -798,7 +800,7 @@ static int p8_del(lua_State *L) {
 static int p8_deli(lua_State *L) {
     luaL_checktype(L, 1, LUA_TTABLE);
     int n = (int)luaL_len(L, 1);
-    int i = (int)luaL_optinteger(L, 2, n);
+    int i = (int)luaL_optnumber(L, 2, (lua_Number)n);
     if (i < 1 || i > n) return 0;
     lua_rawgeti(L, 1, i); // return value
     for (int j = i; j < n; j++) {
@@ -868,8 +870,9 @@ static int p8_foreach(lua_State *L) {
 static int p8_sub(lua_State *L) {
     size_t len;
     const char *s = luaL_checklstring(L, 1, &len);
-    int i = (int)luaL_checkinteger(L, 2);
-    int j = (int)luaL_optinteger(L, 3, -1);
+    // Use checknumber (not checkinteger) — PICO-8 accepts floats and truncates
+    int i = (int)luaL_checknumber(L, 2);
+    int j = (int)luaL_optnumber(L, 3, -1.0);
     // Convert PICO-8 1-based indices, negative wraps
     if (i < 0) i = (int)len + i + 1;
     if (j < 0) j = (int)len + j + 1;
@@ -881,7 +884,7 @@ static int p8_sub(lua_State *L) {
 }
 
 static int p8_chr(lua_State *L) {
-    int n = (int)luaL_checkinteger(L, 1);
+    int n = (int)luaL_checknumber(L, 1);
     char c = (char)(n & 0xFF);
     lua_pushlstring(L, &c, 1);
     return 1;
@@ -890,8 +893,8 @@ static int p8_chr(lua_State *L) {
 static int p8_ord(lua_State *L) {
     size_t len;
     const char *s = luaL_checklstring(L, 1, &len);
-    int i = (int)luaL_optinteger(L, 2, 1);
-    int n = (int)luaL_optinteger(L, 3, 1);
+    int i = (int)luaL_optnumber(L, 2, 1.0);
+    int n = (int)luaL_optnumber(L, 3, 1.0);
     if (i < 1) i = 1;
     int count = 0;
     for (int k = 0; k < n; k++) {
@@ -1014,7 +1017,7 @@ static int p8_time(lua_State *L) {
 }
 
 static int p8_stat(lua_State *L) {
-    int n = (int)luaL_checkinteger(L, 1);
+    int n = (int)luaL_checknumber(L, 1);
     switch (n) {
     case 0: // Memory usage (KB)
         lua_pushnumber(L, (lua_Number)(lua_gc(L, LUA_GCCOUNT, 0)));
@@ -1125,7 +1128,7 @@ static int p8_music(lua_State *L) {
 // idx: 1-5, label: string, callback: function or nil to remove
 static int p8_menuitem_refs[5] = { LUA_NOREF, LUA_NOREF, LUA_NOREF, LUA_NOREF, LUA_NOREF };
 static int p8_menuitem(lua_State *L) {
-    int idx = (int)luaL_checkinteger(L, 1);
+    int idx = (int)luaL_checknumber(L, 1);
     if (idx < 1 || idx > 5) return 0;
     // Free old ref
     if (p8_menuitem_refs[idx-1] != LUA_NOREF) {

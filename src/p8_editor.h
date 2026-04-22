@@ -21,6 +21,10 @@ void p8_editor_enter(void);
 // Load a file into the editor buffer (without entering editor mode).
 bool p8_editor_load(const char *path);
 
+// Load raw Lua source text into the editor buffer (for .p8.png carts).
+// Clears the filename — buffer shows as [new] but contains the cart code.
+bool p8_editor_load_buf(const char *lua_code, size_t lua_len);
+
 // Save the editor buffer. If path is non-NULL/non-empty, sets the filename first.
 // Adds .p8 extension if missing. Returns true on success.
 bool p8_editor_save(const char *path);
